@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flappy Fish</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: linear-gradient(to bottom, #00c6ff, #0072ff);
+      font-family: Arial, sans-serif;
+      text-align: center;
+      color: white;
+    }
+
+    #gameCanvas {
+      display: block;
+      margin: auto;
+      background: linear-gradient(to bottom, #00c6ff, #004d99);
+    }
+
+    .controls {
+      margin: 10px;
+    }
+
+    button {
+      margin: 0 5px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 5px;
+      background: #ff4d4d;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #cc0000;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button onclick="startGame()">Start</button>
+    <button onclick="pauseGame()">Pause</button>
+    <button onclick="restartGame()">Restart</button>
+  </div>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let fish, pipes, score, bestScore, gravity, lift, gameLoop, paused;
+
+    function init() {
+      fish = { x: 80, y: canvas.height / 2, radius: 15, velocity: 0 };
+      pipes = [];
+      score = 0;
+      gravity = 0.4;
+      lift = -7;
+      paused = false;
+      if (!localStorage.getItem("flappyFishBest")) {
+        localStorage.setItem("flappyFishBest", "0");
+      }
+      bestScore = parseInt(localStorage.getItem("flappyFishBest"));
+    }
+
+    function startGame() {
+      if (gameLoop) return;
+      gameLoop = setInterval(update, 20);
+    }
+
+    function pauseGame() {
+      paused = !paused;
+    }
+
+    function restartGame() {
+      clearInterval(gameLoop);
+      gameLoop = null;
+      init();
+      draw();
+    }
+
+    function flap() {
+      if (!paused) fish.velocity = lift;
+    }
+
+    document.addEventListener("keydown", e => {
+      if (e.code === "Space" || e.code === "ArrowUp") flap();
+      if (e.code === "KeyP") pauseGame();
+      if (e.code === "KeyR") restartGame();
+    });
+
+    document.addEventListener("mousedown", flap);
+
+    function drawFish() {
+      ctx.beginPath();
+      ctx.fillStyle = "#1E90FF"; // body
+      ctx.ellipse(fish.x, fish.y, fish.radius + 5, fish.radius, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // tail
+      ctx.beginPath();
+      ctx.moveTo(fish.x - fish.radius - 5, fish.y);
+      ctx.lineTo(fish.x - fish.radius - 20, fish.y - 10);
+      ctx.lineTo(fish.x - fish.radius - 20, fish.y + 10);
+      ctx.closePath();
+      ctx.fillStyle = "#104E8B";
+      ctx.fill();
+
+      // eye
+      ctx.beginPath();
+      ctx.arc(fish.x + 8, fish.y - 3, 3, 0, Math.PI * 2);
+      ctx.fillStyle = "white";
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(fish.x + 8, fish.y - 3, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = "black";
+      ctx.fill();
+    }
+
+    function drawPipe(pipe) {
+      ctx.fillStyle = "#ff6666"; // coral
+      ctx.fillRect(pipe.x, 0, pipe.width, pipe.top);
+      ctx.fillRect(pipe.x, pipe.bottom, pipe.width, canvas.height - pipe.bottom);
+    }
+
+    function drawBubbles() {
+      for (let i = 0; i < 10; i++) {
+        ctx.beginPath();
+        ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 3, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        ctx.fill();
+      }
+    }
+
+    function drawOceanFloor() {
+      const floorHeight = 50;
+      ctx.fillStyle = "#663300"; // sand
+      ctx.fillRect(0, canvas.height - floorHeight, canvas.width, floorHeight);
+
+      // seaweed
+      for (let i = 0; i < canvas.width; i += 40) {
+        let baseX = i + 20;
+        let baseY = canvas.height - floorHeight;
+        ctx.strokeStyle = "#228B22";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.quadraticCurveTo(baseX - 10, baseY - 40, baseX, baseY - 80);
+        ctx.quadraticCurveTo(baseX + 10, baseY - 40, baseX, baseY);
+        ctx.stroke();
+      }
+    }
+
+    function update() {
+      if (paused) {
+        draw();
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      drawBubbles();
+
+      fish.velocity += gravity;
+      fish.y += fish.velocity;
+
+      if (fish.y + fish.radius > canvas.height - 50 || fish.y - fish.radius < 0) {
+        restartGame();
+        return;
+      }
+
+      if (Math.random() < 0.02) {
+        let gap = 120;
+        let top = Math.random() * (canvas.height - gap - 150) + 50;
+        pipes.push({ x: canvas.width, width: 40, top: top, bottom: top + gap, passed: false });
+      }
+
+      for (let i = pipes.length - 1; i >= 0; i--) {
+        let pipe = pipes[i];
+        pipe.x -= 2;
+
+        drawPipe(pipe);
+
+        if (!pipe.passed && fish.x > pipe.x + pipe.width) {
+          score++;
+          pipe.passed = true;
+          if (score > bestScore) {
+            bestScore = score;
+            localStorage.setItem("flappyFishBest", bestScore);
+          }
+        }
+
+        if (fish.x + fish.radius > pipe.x && fish.x - fish.radius < pipe.x + pipe.width &&
+            (fish.y - fish.radius < pipe.top || fish.y + fish.radius > pipe.bottom)) {
+          restartGame();
+          return;
+        }
+
+        if (pipe.x + pipe.width < 0) {
+          pipes.splice(i, 1);
+        }
+      }
+
+      drawFish();
+      drawOceanFloor();
+
+      ctx.fillStyle = "white";
+      ctx.font = "20px Arial";
+      ctx.fillText("Score: " + score, 10, 25);
+      ctx.fillText("Best: " + bestScore, 10, 50);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBubbles();
+      drawFish();
+      pipes.forEach(drawPipe);
+      drawOceanFloor();
+      ctx.fillStyle = "white";
+      ctx.font = "20px Arial";
+      ctx.fillText("Score: " + score, 10, 25);
+      ctx.fillText("Best: " + bestScore, 10, 50);
+      if (paused) ctx.fillText("Paused", canvas.width / 2 - 30, canvas.height / 2);
+    }
+
+    init();
+    draw();
+  </script>
+</body>
+</html>
